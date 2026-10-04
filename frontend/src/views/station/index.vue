@@ -55,6 +55,7 @@
             >
               {{ action }}
             </button>
+            <button class="link" type="button" @click="locateInspection(row)">巡检定位</button>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -72,6 +73,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import {
   downloadEntries,
@@ -86,6 +88,8 @@ const columns = ["站点编号", "站点名称", "站点类型", "所在河流",
 const actions = ["升级为加强", "登记故障", "撤销站点"]
 const statuses = ["正常运行", "设备故障", "汛期加强", "暂停运行", "已撤销"]
 const stats = [{"label": "站点总数", "value": 0}, {"label": "正常运行数", "value": 0}, {"label": "故障站点数", "value": 0}]
+
+const router = useRouter()
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -110,6 +114,11 @@ function exportRows() {
 
 function openCreate() {
   errorMessage.value = '水文监测站登记入口尚未接入审批流'
+}
+
+function locateInspection(row: EntryRow) {
+  // 沿站点取数链路跳到巡检列表，按站点编号联合定位。
+  router.push({ path: '/inspection', query: { 站点: String(row['站点编号'] ?? '') } })
 }
 
 function runAction(action: string, row: EntryRow) {

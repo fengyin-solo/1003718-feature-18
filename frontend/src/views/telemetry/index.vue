@@ -55,6 +55,7 @@
             >
               {{ action }}
             </button>
+            <button class="link" type="button" @click="linkRepair(row)">联动检修</button>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -72,6 +73,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import {
   downloadEntries,
@@ -80,6 +82,8 @@ import {
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
+import { useFilterStore } from '@/stores/filters'
+import { useSessionStore } from '@/stores/session'
 
 const meta = moduleMeta('telemetry')
 const columns = ["设备编号", "设备类型", "所属站点", "通讯方式", "安装日期", "最近维护日", "电池余量", "设备状态"]
@@ -87,10 +91,15 @@ const actions = ["报修设备", "确认修复", "停用设备"]
 const statuses = ["正常运行", "信号异常", "低电量", "待维修", "已停用"]
 const stats = [{"label": "设备总数", "value": 0}, {"label": "正常运行数", "value": 0}, {"label": "待维修数", "value": 0}]
 
+const router = useRouter()
+const session = useSessionStore()
+const filterStore = useFilterStore()
+
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
-const filters = ref<Record<string, string>>({})
+const saved = filterStore.stateOf(meta.key)
+const filters = ref<Record<string, string>>({ ...saved.values })
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
@@ -101,6 +110,7 @@ const statusSummary = computed(() =>
 
 function resetFilters() {
   filters.value = {}
+  filterStore.reset(meta.key)
   reload()
 }
 
@@ -112,9 +122,18 @@ function openCreate() {
   errorMessage.value = '遥测设备登记入口尚未接入审批流'
 }
 
+function linkRepair(row: EntryRow) {
+  // 另一个设备入口联动新增检修事项：保存当前筛选，返回时保留。
+  filterStore.setValues(meta.key, filters.value)
+  router.push({ path: '/repair', query: { from: 'telemetry', device: String(row.id) } })
+}
+
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
-  const result = applyAction(meta.key, Number(row.id), action)
+  const result = applyAction(meta.key, Number(row.id), action, {
+    operator: session.operator,
+    roles: session.roles,
+  })
   if (!result.ok) {
     errorMessage.value = result.message
     return
@@ -124,6 +143,7 @@ function runAction(action: string, row: EntryRow) {
 
 function reload() {
   errorMessage.value = ''
+  filterStore.setValues(meta.key, filters.value)
   try {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
